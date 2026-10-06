@@ -25,4 +25,10 @@
 
 ## 当前进度与下一步
 
-设计已完成，还没有代码。下一步：先写数据库结构和扣减逻辑（含测试），再做 MCP 工具层。
+代码已完成并通过测试：扣减逻辑（`src/deduct.ts`）、库存与计划的 DB 层、11 个 MCP 工具（`src/mcp.ts`）、Hono 应用与 Bearer 认证（`src/app.ts`）、Workers 入口（`src/index.ts`）。
+
+本地开发：`docker run -d --name meal-pg -e POSTGRES_PASSWORD=dev -p 5433:5432 postgres:16`，再 `docker exec -i meal-pg psql -U postgres < schema.sql`；`npm test` 直接连它。`npx wrangler dev` 需要 `.dev.vars` 里写 `MCP_TOKEN=...`。
+
+日本祝日表只有 2026、2027 年（`src/bento.ts`），表外年份会报错，到期前补表。
+
+下一步：部署。建 Neon 库并执行 `schema.sql`，`wrangler hyperdrive create` 后把 id 填进 `wrangler.jsonc`，`wrangler secret put MCP_TOKEN`，`wrangler deploy`，最后在手机 Claude 里添加这个远程 MCP。

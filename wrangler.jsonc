@@ -1,0 +1,14 @@
+{
+  "name": "meal-planner",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      // 部署前：wrangler hyperdrive create meal-planner --connection-string=<Neon 连接串>，把返回的 id 填这里
+      "id": "<HYPERDRIVE_ID>",
+      "localConnectionString": "postgres://postgres:dev@localhost:5433/postgres"
+    }
+  ]
+}
