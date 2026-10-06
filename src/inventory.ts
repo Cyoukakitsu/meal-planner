@@ -1,4 +1,4 @@
-import type { Sql } from "postgres";
+import type { Sql, TransactionSql } from "postgres";
 import { deduct, type DeductResult } from "./deduct";
 
 export type NewIngredient = {
@@ -37,21 +37,22 @@ export async function listInventory(sql: Sql, today: string) {
   return { items: [...items], expiring };
 }
 
-/** 按食材名和单位扣减库存，先扣最早到期；被拒绝时库存不变。 */
-export function consume(sql: Sql, name: string, unit: string, need: number, today: string) {
-  return sql.begin(async (tx): Promise<DeductResult> => {
-    const batches = await tx<{ id: number; quantity: number; expiry: string }[]>`
-      SELECT id, quantity::float, expiry::text FROM ingredient
-      WHERE name = ${name} AND unit = ${unit} AND quantity > 0 FOR UPDATE`;
-    const r = deduct([...batches], need, today);
-    if (!r.ok) return r;
-    for (const u of r.updates) {
-      await tx`UPDATE ingredient SET quantity = ${u.quantity},
-               used_up_at = ${u.quantity === 0 ? today : null} WHERE id = ${u.id}`;
-    }
-    return r;
-  });
+/** 按食材名和单位扣减库存，先扣最早到期；被拒绝时库存不变。可传入事务句柄，跟随外层事务回滚。 */
+export async function consumeIn(tx: TransactionSql, name: string, unit: string, need: number, today: string): Promise<DeductResult> {
+  const batches = await tx<{ id: number; quantity: number; expiry: string }[]>`
+    SELECT id, quantity::float, expiry::text FROM ingredient
+    WHERE name = ${name} AND unit = ${unit} AND quantity > 0 FOR UPDATE`;
+  const r = deduct([...batches], need, today);
+  if (!r.ok) return r;
+  for (const u of r.updates) {
+    await tx`UPDATE ingredient SET quantity = ${u.quantity},
+             used_up_at = ${u.quantity === 0 ? today : null} WHERE id = ${u.id}`;
+  }
+  return r;
 }
+
+export const consume = (sql: Sql, name: string, unit: string, need: number, today: string) =>
+  sql.begin((tx) => consumeIn(tx, name, unit, need, today));
 
 function addDays(date: string, n: number) {
   const d = new Date(`${date}T00:00:00Z`);
