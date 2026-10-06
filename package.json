@@ -11,6 +11,9 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
-    "postgres": "^3.4.9"
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "hono": "^4.13.13",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.5"
   }
 }
