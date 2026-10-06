@@ -54,6 +54,33 @@ export async function consumeIn(tx: TransactionSql, name: string, unit: string, 
 export const consume = (sql: Sql, name: string, unit: string, need: number, today: string) =>
   sql.begin((tx) => consumeIn(tx, name, unit, need, today));
 
+export type IngredientPatch = { quantity?: number; expiry?: string; storage?: NewIngredient["storage"]; remove?: boolean };
+
+/** 修改数量、期限、存放方式；remove 只能移除已过期的食材（用户确认后）。 */
+export async function adjustIngredient(
+  sql: Sql,
+  id: number,
+  p: IngredientPatch,
+  today: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (p.quantity !== undefined && p.quantity < 0) return { ok: false, error: "数量不能为负" };
+  const [row] = await sql`SELECT expiry::text FROM ingredient WHERE id = ${id}`;
+  if (!row) return { ok: false, error: `食材 ${id} 不存在` };
+  if (p.remove) {
+    if (row.expiry >= today) return { ok: false, error: `食材 ${id} 还没过期，不能移除；用完请把数量改为 0` };
+    await sql`DELETE FROM ingredient WHERE id = ${id}`;
+    return { ok: true };
+  }
+  await sql`UPDATE ingredient SET
+    quantity = COALESCE(${p.quantity ?? null}::numeric, quantity),
+    expiry   = COALESCE(${p.expiry ?? null}::date, expiry),
+    storage  = COALESCE(${p.storage ?? null}::text, storage),
+    used_up_at = CASE WHEN COALESCE(${p.quantity ?? null}::numeric, quantity) = 0
+                      THEN COALESCE(used_up_at, ${today}::date) END
+    WHERE id = ${id}`;
+  return { ok: true };
+}
+
 function addDays(date: string, n: number) {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);

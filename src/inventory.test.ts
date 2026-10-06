@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { addIngredients, consume, listInventory } from "./inventory";
+import { addIngredients, adjustIngredient, consume, listInventory } from "./inventory";
 
 const sql = postgres(process.env.TEST_DATABASE_URL ?? "postgres://postgres:dev@localhost:5433/postgres");
 const today = "2026-10-06";
@@ -81,5 +81,45 @@ describe("consume", () => {
   test("单位不同视为不同食材", async () => {
     await addIngredients(sql, [milk], today);
     expect((await consume(sql, "牛奶", "ml", 100, today)).ok).toBe(false);
+  });
+});
+
+describe("adjustIngredient", () => {
+  const rowOf = async () => (await sql`SELECT quantity::float, expiry::text, storage, used_up_at::text FROM ingredient`)[0];
+
+  test("修改数量、期限、存放方式", async () => {
+    await addIngredients(sql, [milk], today);
+    const r = await adjustIngredient(sql, 1, { quantity: 1, expiry: "2026-10-15", storage: "冷冻" }, today);
+    expect(r.ok).toBe(true);
+    expect(await rowOf()).toMatchObject({ quantity: 1, expiry: "2026-10-15", storage: "冷冻" });
+  });
+
+  test("数量改为 0 记录用完日期，改回正数则清除", async () => {
+    await addIngredients(sql, [milk], today);
+    await adjustIngredient(sql, 1, { quantity: 0 }, today);
+    expect((await rowOf()).used_up_at).toBe(today);
+    await adjustIngredient(sql, 1, { quantity: 2 }, today);
+    expect((await rowOf()).used_up_at).toBeNull();
+  });
+
+  test("负数量被拒绝", async () => {
+    await addIngredients(sql, [milk], today);
+    expect((await adjustIngredient(sql, 1, { quantity: -1 }, today)).ok).toBe(false);
+  });
+
+  test("移除已过期食材", async () => {
+    await addIngredients(sql, [{ ...milk, expiry: "2026-10-04" }], today);
+    expect((await adjustIngredient(sql, 1, { remove: true }, today)).ok).toBe(true);
+    expect(await sql`SELECT 1 FROM ingredient`).toHaveLength(0);
+  });
+
+  test("没过期的食材不能移除", async () => {
+    await addIngredients(sql, [milk], today);
+    expect((await adjustIngredient(sql, 1, { remove: true }, today)).ok).toBe(false);
+    expect(await sql`SELECT 1 FROM ingredient`).toHaveLength(1);
+  });
+
+  test("食材不存在", async () => {
+    expect((await adjustIngredient(sql, 999, { quantity: 1 }, today)).ok).toBe(false);
   });
 });
