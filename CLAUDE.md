@@ -31,4 +31,6 @@
 
 日本祝日表只有 2026、2027 年（`src/bento.ts`），表外年份会报错，到期前补表。
 
-下一步：部署。建 Neon 库并执行 `schema.sql`，`wrangler hyperdrive create` 后把 id 填进 `wrangler.jsonc`，`wrangler secret put MCP_TOKEN`，`wrangler deploy`，最后在手机 Claude 里添加这个远程 MCP。
+已部署：`https://meal-planner.z261459808.workers.dev/mcp`（Cloudflare Workers + Hyperdrive + Neon 直连地址，不要用 `-pooler`）。手机 Claude 以自定义连接器接入，认证选 "No sign-in"，在 Request headers 里填 `Authorization: Bearer <MCP_TOKEN>`。已实测通过。
+
+后续：2027 年底前补日本祝日表；如需轮换密钥，用 `wrangler secret put MCP_TOKEN`，并同步改连接器里的请求头。
